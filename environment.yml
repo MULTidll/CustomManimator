@@ -1,4 +1,4 @@
-name: streamlit-video-gen
+name: manimator
 channels:
   - defaults
   - conda-forge

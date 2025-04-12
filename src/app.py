@@ -12,8 +12,8 @@ from services.tts_service import generate_audio
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def main():
-    st.title("Idea/PDF to Video Generator")
-
+    st.title("Manimator")
+    st.write("Generate videos from text ideas or PDF files, You can also just paste arxiv links ;p")
     input_type = st.radio("Choose input type:", ("Text Idea", "Upload PDF"))
 
     idea = None
@@ -171,6 +171,17 @@ def main():
                      logging.info(f"Removed potentially updated temporary audio file: {current_audio_file}")
                  except OSError as e:
                      logging.error(f"Error removing potentially updated temporary audio file {current_audio_file}: {e}")
+    st.markdown("<br><br>", unsafe_allow_html=True) 
+    st.markdown("---")
+    
+    
+    st.markdown("""
+        ### Want to help improve this app?
+        - Give good Manim Examples and make PRs in guide.md, find it in repo [GitHub](https://github.com/mostlykiguess/Manimator)
+        - Report issues on [GitHub Issues](https://github.com/mostlykiguess/Manimator/issues)
+        - Email problematic prompts to me 
+        """)
+    
 
 if __name__ == "__main__":
     main()
