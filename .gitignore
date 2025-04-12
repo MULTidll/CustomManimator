@@ -1,0 +1,9 @@
+video-gen
+src/media/*
+src/__pycache__/*
+src/services/__pycache__/*
+src/api/__pycache__/*
+src/tests/__pycache__/*
+.env
+media/*
+__pycache__/*
