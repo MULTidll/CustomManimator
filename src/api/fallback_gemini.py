@@ -1,6 +1,6 @@
 import os
 import re
-import google.genai as genai
+from google import genai
 from google.genai import types as genai_types
 import logging
 from .gemini import SYSTEM_PROMPT, base_prompt_instructions

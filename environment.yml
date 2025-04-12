@@ -14,11 +14,12 @@ dependencies:
       - manim>=0.17.3
       - kokoro>=0.3.1
       - soundfile
-      - google-genai>=0.3.0
-      - python-dotenv>=1.0.0
-      - transformers>=4.31.0
-      - accelerate>=0.21.0
+      - google-genai
+      - python-dotenv
+      - transformers
+      - accelerate
       - httpx>=0.24.0
   - pytorch
   - torchvision
   - torchaudio
+  - google-genai

@@ -3,3 +3,4 @@ latexmk
 texlive-full
 libcairo2-dev
 pkg-config
+libpango1.0-dev
