@@ -8,4 +8,5 @@ src/tests/__pycache__/*
 media/*
 __pycache__/*
 Manimator/*
+Manimator/
 
