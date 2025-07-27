@@ -39,7 +39,7 @@ base_prompt_instructions = (
         "\n3. Matrix visualization:"
         "\n   - Use MathTex for display"
         "\n   - Format: r'\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}'"
-        "\n4. Use only verified Manim methods:" 
+        "\n4. Use only verified Manim methods:"
         "\n   - self.play(), self.wait(), Create(), Write(), Transform(), FadeIn(), FadeOut(), Add(), Remove(), MoveAlongPath(), Rotating(), Circumscribe(), Indicate(), FocusOn(), Shift(), Scale(), MoveTo(), NextTo(), Axes(), Plot(), LineGraph(), BarChart(), Dot(), Line(), Arrow(), Text(), Tex(), MathTex(), VGroup(), Mobject.animate, self.camera.frame.animate"
         "\n5. DO NOT USE IMAGES IMPORTS."
         "\n6. Make the video crazy and innovative by:"
@@ -75,7 +75,7 @@ def load_manim_examples():
     if not guide_path.exists():
         logging.warning(f"Manim examples guide not found at {guide_path}")
         return ""
-    
+
     logging.info(f"Loading Manim examples from {guide_path}")
     return guide_path.read_text(encoding="utf-8")
 
@@ -94,7 +94,7 @@ def generate_video(idea: str | None = None, pdf_path: str | None = None):
 
     client = genai.Client(api_key=api_key)
     contents = []
-    
+
     manim_examples = load_manim_examples()
     if manim_examples:
         examples_prompt = "Below are examples of Manim code that demonstrate proper usage patterns. Use these as reference when generating your animation:\n\n" + manim_examples
@@ -102,7 +102,7 @@ def generate_video(idea: str | None = None, pdf_path: str | None = None):
         logging.info("Added Manim examples from guide.md to prime the model")
     else:
         logging.warning("No Manim examples were loaded from guide.md")
-    
+
     user_prompt_text = ""
 
     if pdf_path:
@@ -129,9 +129,9 @@ def generate_video(idea: str | None = None, pdf_path: str | None = None):
         generation_config = genai_types.GenerateContentConfig(
         system_instruction=SYSTEM_PROMPT
     )
-    
+
         response = client.models.generate_content(
-            model="gemini-1.5-pro",
+            model="gemini-2.0-flash",
             contents=contents,
             config=generation_config
             )
@@ -205,4 +205,3 @@ def generate_video(idea: str | None = None, pdf_path: str | None = None):
     else:
         logging.error("Error generating video content. No response received from Gemini.")
         raise Exception("Error generating video content. No response received.")
-
