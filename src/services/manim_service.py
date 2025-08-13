@@ -3,90 +3,153 @@ import subprocess
 import os
 import glob
 import logging
+import platform
+
 
 def get_scene_name(manim_code):
-    match = re.search(r'class\s+(\w+)\s*\(\s*Scene\s*\)', manim_code)
+    """Extracts the scene class name from Manim code."""
+    # This regex looks for 'class YourSceneName(Scene):' or 'class YourSceneName(ThreeDScene):'
+    match = re.search(
+        r"class\s+(\w+)\s*\(\s*(?:ThreeD|Multi)?[Ss]cene\s*\)", manim_code
+    )
     if match:
         return match.group(1)
     raise ValueError("No Scene class found in generated code")
 
-def create_manim_video(video_data, manim_code, audio_file=None):
+
+def sanitize_path_for_ffmpeg(path: str) -> str:
+    if platform.system() == "Windows":
+        # For Windows
+        return path.replace("\\", "\\\\").replace(":", "\\:")
+    else:
+        # For Linux/macOS
+        return (
+            path.replace("'", "'\\''")
+            .replace(":", "\\:")
+            .replace(",", "\\,")
+            .replace("[", "\\[")
+            .replace("]", "\\]")
+        )
+
+
+def create_manim_video(video_data, manim_code, audio_file=None, subtitle_file=None):
     logging.info("Starting to create Manim video")
-    with open("generated_video.py", "w") as f:
-        manim_code_clean = re.sub(r"```python", "", manim_code)
-        manim_code_clean = manim_code_clean.replace("```", "").strip()
-        f.write(manim_code_clean)
-    
-    scene_name = get_scene_name(manim_code_clean)
+    with open("generated_video.py", "w", encoding="utf-8") as f:
+        f.write(manim_code)
+
+    scene_name = get_scene_name(manim_code)
     logging.info(f"Identified scene name: {scene_name}")
-    
+
     command = ["manim", "-qh", "generated_video.py", scene_name]
     logging.info(f"Running Manim with command: {' '.join(command)}")
-    subprocess.run(command, check=True)
-    
-    search_pattern = os.path.join("media", "videos", "generated_video", "1080p60", f"{scene_name}.mp4")
-    if not os.path.exists(search_pattern):
-        logging.error(f"No rendered video found at: {search_pattern}")
-        raise Exception(f"No rendered video found for scene {scene_name}")
-    
-    output_video = search_pattern
+
+    # Use capture_output=True to get stderr for better error reporting
+    manim_process = subprocess.run(command, check=True, capture_output=True, text=True)
+    if manim_process.returncode != 0:
+        logging.error(f"Manim failed with stderr:\n{manim_process.stderr}")
+        raise subprocess.CalledProcessError(
+            manim_process.returncode, command, stderr=manim_process.stderr
+        )
+
+    video_path = os.path.join(
+        "media", "videos", "generated_video", "1080p60", f"{scene_name}.mp4"
+    )
+    if not os.path.exists(video_path):
+        logging.error(f"No rendered video found at: {video_path}")
+        raise FileNotFoundError(f"No rendered video found for scene {scene_name}")
+
+    input_video = video_path
     final_output = "final_output.mp4"
+    extended_video_temp = "extended_video.mp4"
 
     if audio_file and os.path.exists(audio_file):
-        logging.info(f"Merging video with audio file: {audio_file}")
-        
-        video_duration_cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", 
-                             "-of", "default=noprint_wrappers=1:nokey=1", output_video]
-        audio_duration_cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", 
-                             "-of", "default=noprint_wrappers=1:nokey=1", audio_file]
-        
-        video_duration = float(subprocess.check_output(video_duration_cmd).decode('utf-8').strip())
-        audio_duration = float(subprocess.check_output(audio_duration_cmd).decode('utf-8').strip())
-        
-        logging.info(f"Video duration: {video_duration}s, Audio duration: {audio_duration}s")
-        
-        if audio_duration > video_duration:
-            logging.info("Audio is longer than video, extending video duration")
-            extended_video = "extended_video.mp4"
-            padding_time = audio_duration - video_duration
-            
-            extend_cmd = [
-                "ffmpeg", "-y",
-                "-i", output_video,
-                "-f", "lavfi", "-i", "color=black:s=1920x1080:r=60",
-                "-filter_complex", f"[0:v][1:v]concat=n=2:v=1:a=0[outv]",
-                "-map", "[outv]",
-                "-c:v", "libx264",
-                "-t", str(audio_duration),
-                extended_video
-            ]
-            
-            logging.info(f"Extending video with command: {' '.join(extend_cmd)}")
-            subprocess.run(extend_cmd, check=True)
-            output_video = extended_video
-        
-        merge_cmd = [
-            "ffmpeg", "-y",
-            "-i", output_video,
-            "-i", audio_file,
-            "-c:v", "copy",
-            "-c:a", "aac",
-            "-map", "0:v:0",
-            "-map", "1:a:0",
-            final_output
-        ]
-        
-        logging.info(f"Merging with command: {' '.join(merge_cmd)}")
-        subprocess.run(merge_cmd, check=True)
-        output_video = final_output
-        
-        if os.path.exists("extended_video.mp4"):
-            os.remove("extended_video.mp4")
-            logging.info("Removed temporary extended video file")
+        logging.info(f"Audio file found: {audio_file}")
 
+        video_duration_cmd = [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            input_video,
+        ]
+        audio_duration_cmd = [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            audio_file,
+        ]
+
+        video_duration = float(
+            subprocess.check_output(video_duration_cmd).decode("utf-8").strip()
+        )
+        audio_duration = float(
+            subprocess.check_output(audio_duration_cmd).decode("utf-8").strip()
+        )
+
+        logging.info(
+            f"Video duration: {video_duration}s, Audio duration: {audio_duration}s"
+        )
+
+        # If audio is longer, extend the video with a freeze frame of the last frame
+        if audio_duration > video_duration:
+            logging.info(
+                "Audio is longer than video, extending video with freeze frame."
+            )
+
+            extend_cmd = [
+                "ffmpeg",
+                "-y",
+                "-i",
+                input_video,
+                "-vf",
+                f"tpad=stop_mode=clone:stop_duration={audio_duration - video_duration}",
+                "-c:v",
+                "libx264",
+                extended_video_temp,
+            ]
+
+            logging.info(f"Extending video with command: {' '.join(extend_cmd)}")
+            subprocess.run(extend_cmd, check=True, capture_output=True, text=True)
+            input_video = extended_video_temp  # The extended video is now our input
+
+    # merge
+    merge_cmd = ["ffmpeg", "-y", "-i", input_video]
+
+    if audio_file and os.path.exists(audio_file):
+        merge_cmd.extend(["-i", audio_file])
+
+    filter_complex = []
+    maps = ["-map", "0:v:0"]
+    if audio_file and os.path.exists(audio_file):
+        maps.extend(["-map", "1:a:0"])
+
+    # Add subtitle
+    if subtitle_file and os.path.exists(subtitle_file):
+        sanitized_path = sanitize_path_for_ffmpeg(os.path.abspath(subtitle_file))
+        filter_complex.append(f"ass='{sanitized_path}'")
+
+    if filter_complex:
+        merge_cmd.extend(["-vf", ",".join(filter_complex)])
+
+    merge_cmd.extend(maps)
+    merge_cmd.extend(["-c:v", "libx264", "-c:a", "aac", "-shortest", final_output])
+
+    logging.info(f"Merging with final command: {' '.join(merge_cmd)}")
+    subprocess.run(merge_cmd, check=True, capture_output=True, text=True)
+
+    if os.path.exists(extended_video_temp):
+        os.remove(extended_video_temp)
+        logging.info("Removed temporary extended video file.")
     if os.path.exists("generated_video.py"):
         os.remove("generated_video.py")
         logging.info("Removed generated_video.py")
 
-    logging.info(f"Final video created at: {output_video}")
-    return output_video
+    logging.info(f"Final video created at: {final_output}")
+    return final_output
