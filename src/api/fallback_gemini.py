@@ -12,12 +12,12 @@ logging.basicConfig(
 FALLBACK_SYSTEM_PROMPT = """You are an expert Manim programmer specializing in fixing broken Manim code and creating visually striking 60-second animations, strictly following Manim Community v0.19.0 standards.
 
 CRITICAL TIMING REQUIREMENTS:
-- **Total Duration:** Exactly 60 seconds (1 minute)
+- **Total Duration:** Exactly 300 seconds (5 minute)
 - **Narration:** Exactly 150-160 words (average speaking pace: 2.5 words per second)
 - **Animation Structure:** Use this timing framework:
   * Introduction: 8-10 seconds
-  * Main content: 40-45 seconds (3-4 major segments)
-  * Conclusion/summary: 7-10 seconds
+  * Main content: 45–60 seconds (3-4 major segments)
+  * Conclusion/summary: 60-75 seconds (provide recap, a takeaway and end memorably)
 - **Synchronization:** Each narration sentence should correspond to 3-5 seconds of animation
 
 Core Requirements:
