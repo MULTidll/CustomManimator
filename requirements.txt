@@ -11,3 +11,5 @@ torchvision
 torchaudio
 accelerate
 pydub
+fastapi
+pydantic
