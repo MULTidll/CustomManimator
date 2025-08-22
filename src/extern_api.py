@@ -1,4 +1,5 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import tempfile
 import os
@@ -10,10 +11,13 @@ from src.api.gemini import generate_video
 from src.api.fallback_gemini import fix_manim_code
 from src.services.manim_service import create_manim_video
 from src.services.tts_service import generate_audio
+import uuid
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 app = FastAPI()
+
+jobs = {}
 
 class TextIdeaRequest(BaseModel):
     idea: str
@@ -24,19 +28,43 @@ class FixCodeRequest(BaseModel):
     original_context: str
 
 @app.post("/generate_video/text")
-async def generate_from_text(request: TextIdeaRequest):
+async def generate_from_text(request: TextIdeaRequest, background_tasks: BackgroundTasks):
+    job_id = str(uuid.uuid4())
+    background_tasks.add_task(video_job, job_id, request.idea)
+    return {"job_id": job_id, "status": "processing"}
+
+@app.get("/generate_video/status/{job_id}")
+def get_job_status(job_id: str):
+    job = jobs.get(job_id)
+    if not job:
+        return {"status": "not_found"}
+    return job
+
+@app.get("/generate_video/download/{job_id}")
+def download_video(job_id: str):
+    job = jobs.get(job_id)
+    if not job or job["status"] != "done" or not job["result"] or not job["result"].get("video_file"):
+        raise HTTPException(status_code=404, detail="Video not found or not ready yet.")
+    file_path = job["result"]["video_file"]
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File does not exist.")
+    return FileResponse(path=file_path, filename=os.path.basename(file_path), media_type="video/mp4")
+
+def video_job(job_id, idea):
+    jobs[job_id] = {"status": "processing", "result": None, "error": None}
     files_to_cleanup = set()
     try:
-        video_data, script = generate_video(idea=request.idea)
+        video_data, script = generate_video(idea=idea)
         if not video_data or not script:
-            raise HTTPException(status_code=500, detail="Failed to generate initial script/code.")
+            jobs[job_id] = {"status": "error", "result": None, "error": "Failed to generate initial script/code."}
+            return
         try:
             audio_file, subtitle_file = generate_audio(script)
             if audio_file:
                 files_to_cleanup.add(audio_file)
             if subtitle_file:
                 files_to_cleanup.add(subtitle_file)
-        except ValueError as e:
+        except ValueError:
             audio_file, subtitle_file = None, None
         current_manim_code = video_data["manim_code"]
         current_script = script
@@ -59,7 +87,7 @@ async def generate_from_text(request: TextIdeaRequest):
                     fixed_video_data, fixed_script = fix_manim_code(
                         faulty_code=current_manim_code,
                         error_message=error_output,
-                        original_context=request.idea,
+                        original_context=idea,
                     )
                     if fixed_video_data and fixed_script is not None:
                         current_manim_code = fixed_video_data["manim_code"]
@@ -79,17 +107,20 @@ async def generate_from_text(request: TextIdeaRequest):
                 else:
                     final_video = None
         if final_video and os.path.exists(final_video):
-            return {
-                "video_file": final_video,
-                "narration": current_script,
-                "subtitle_file": current_subtitle_file,
+            jobs[job_id] = {
+                "status": "done",
+                "result": {
+                    "video_file": final_video,
+                    "narration": current_script,
+                    "subtitle_file": current_subtitle_file
+                },
                 "error": None
             }
         else:
-            raise HTTPException(status_code=500, detail="Could not generate the video after multiple attempts.")
+            jobs[job_id] = {"status": "error", "result": None, "error": "Could not generate the video after multiple attempts."}
     except Exception as e:
         tb_str = traceback.format_exc()
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}\n{tb_str}")
+        jobs[job_id] = {"status": "error", "result": None, "error": f"An unexpected error occurred: {str(e)}\n{tb_str}"}
     finally:
         for f_path in files_to_cleanup:
             if f_path and os.path.exists(f_path):
